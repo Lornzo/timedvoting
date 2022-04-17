@@ -73,9 +73,12 @@ func TestAgreePass(t *testing.T) {
 
 	for i := 0; i < 11; i++ {
 		wg.Add(1)
-
 		go func() {
-			tVote.Agree(1)
+
+			if err := tVote.Agree(1); err != nil {
+				t.Error(err)
+			}
+
 			wg.Done()
 		}()
 

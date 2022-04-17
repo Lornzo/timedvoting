@@ -12,10 +12,9 @@ type TimedVote struct {
 	Duration  time.Duration
 	FeedBacks IVoteFeedBacks
 
-	locker       sync.Mutex
-	agreeChannel chan uint
-	duration     time.Duration
-	isVoting     bool
+	locker   sync.Mutex
+	isVoting bool
+	timmer   *time.Timer
 }
 
 func (tm *TimedVote) Start() error {
@@ -32,35 +31,31 @@ func (tm *TimedVote) Start() error {
 	}
 
 	tm.isVoting = true
-	tm.agreeChannel = make(chan uint)
-	tm.duration = tm.Duration
-	go tm.votingHandler()
+	tm.timmer = time.AfterFunc(tm.Duration, tm.closeVoting)
 
 	return nil
 }
 
 func (tm *TimedVote) Agree(agreeNum uint) error {
-	tm.locker.Lock()
-	defer tm.locker.Unlock()
 
-	if !tm.isVoting {
+	if tm.IsVoting() {
 		return fmt.Errorf("object TimedVote err : %w", errors.New("vote is finished or not start yet"))
 	}
-
-	tm.agreeChannel <- agreeNum
+	fmt.Println("123")
+	tm.Vote.Agree(agreeNum)
+	if tm.Vote.IsPass() {
+		fmt.Println("pass and close")
+		tm.closeVoting()
+	} else {
+		fmt.Println("unpass and not close")
+	}
 
 	return nil
-
 }
 
 func (tm *TimedVote) Close() error {
-	var isVoting bool
 
-	tm.locker.Lock()
-	isVoting = tm.isVoting
-	tm.locker.Unlock()
-
-	if !isVoting {
+	if !tm.IsVoting() {
 		return fmt.Errorf("vote is finished or not start yet")
 	}
 
@@ -71,41 +66,29 @@ func (tm *TimedVote) Close() error {
 func (tm *TimedVote) IsVoting() bool {
 	tm.locker.Lock()
 	defer tm.locker.Unlock()
+	fmt.Println(tm.isVoting)
 	return tm.isVoting
 }
 
-func (tm *TimedVote) votingHandler() {
+func (tm *TimedVote) closeVoting() {
 
-	var timmer *time.Timer = time.AfterFunc(tm.duration, tm.closeVoting)
-
-	for {
-		if agreeNum, ok := <-tm.agreeChannel; ok {
-			tm.Vote.Agree(agreeNum)
-			if tm.Vote.IsPass() {
-				tm.closeVoting()
-			}
-		} else {
-			break
-		}
+	if !tm.IsVoting() {
+		return
 	}
 
-	if !timmer.Stop() {
-		<-timmer.C
+	tm.locker.Lock()
+	defer tm.locker.Unlock()
+
+	tm.isVoting = false
+	if !tm.timmer.Stop() {
+		<-tm.timmer.C
 	}
 
 	if tm.Vote.IsPass() {
+		fmt.Println("pass")
 		tm.FeedBacks.Pass()
 	} else {
+		fmt.Println("unpass")
 		tm.FeedBacks.UnPass()
-	}
-
-}
-
-func (tm *TimedVote) closeVoting() {
-	tm.locker.Lock()
-	defer tm.locker.Unlock()
-	if tm.isVoting {
-		tm.isVoting = false
-		close(tm.agreeChannel)
 	}
 }

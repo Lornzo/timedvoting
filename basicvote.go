@@ -1,6 +1,9 @@
 package timedvoting
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 func NewBasicVote(passLimit uint) *basicVote {
 	return &basicVote{
@@ -18,6 +21,7 @@ func (bv *basicVote) Agree(agreeNum uint) {
 	bv.locker.Lock()
 	defer bv.locker.Unlock()
 	bv.agree += agreeNum
+	fmt.Println(bv.agree)
 }
 
 func (bv *basicVote) IsPass() bool {
